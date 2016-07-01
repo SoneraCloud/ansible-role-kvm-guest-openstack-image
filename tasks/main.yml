@@ -43,8 +43,12 @@
   register: temp_dir
   tags: image
 
+- name: Change ownership of temp directory
+  file: path={{ temp_dir.stdout }} state=directory mode=0700 owner=qemu group=qemu
+  tags: image
+
 - name: Generate cloud-init meta-data
-  template: src={{ item }}.j2 dest={{ temp_dir.stdout }}/{{ item }}
+  template: src={{ item }}.j2 dest={{ temp_dir.stdout }}/{{ item }} mode=0400 owner=qemu group=qemu
   with_items:
     - meta-data
     - user-data
@@ -59,17 +63,20 @@
 # Actually do the KVM stuff
 - name: Create a copy-on-write clone of the image
   command: qemu-img create -f qcow2 -o backing_file={{ image_path}}/{{ image_name }} {{ image_path}}/{{ guest_name }}.qcow2
+  tags: image
 
 - name: Define the VM though libvirt
   virt: name={{ guest_name }}
         command=define
         xml="{{ lookup('template', 'libvirt-guest.xml.j2') }}"
         uri=qemu:///system
+  tags: image
 
 - name: Start the VM
   virt: name={{ guest_name }}
         command=start
         uri=qemu:///system
+  tags: image
 
    # Cleanup temp files? VM is still booting :-(
 #- name: cleanup cloud-init files
