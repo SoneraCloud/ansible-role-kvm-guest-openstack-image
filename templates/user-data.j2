@@ -1,4 +1,5 @@
 #cloud-config
-password: test
-chpasswd: { expire: False }
-ssh_pwauth: True
+users:
+  - name: {{ bootstrap_user }}
+    ssh-authorized-keys:
+      - {{ bootstrap_ssh_key }}

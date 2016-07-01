@@ -3,4 +3,6 @@
   #remote_user: root
   become: yes
   roles:
-    - { role: ansible-role-kvm-guest-openstack-image, guest_name: 'test' }
+    - { role: ansible-role-kvm-guest-openstack-image, guest_name: 'test',
+        bootstrap_ssh_key: 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQDUuc7AtrfgiD6EdQeC/M+1b3qsqmWpulhWUGzuF/Ug48KHhyGKnq7QdzG1kL6V8FvI22Yiz8NIrKilt0xzYP7N19BMPGUsTMVPrhUrYt9pYnjy0SAhgTynpo5FPlcKt6bVr3zSG0mBDzwJyUY70n6U5PCfVOp35gkwI34G7tr9nf+zlgWGPDPAls956OT7Rr58MDOiirzged+E7VaBc62wpAN8iF0R1jcflN3yWMoQkVycNE8Su6AQWYyvh5pt+zBvZaNvzgzPRD61w0rGr25WhvZfOAX+nWlSHJMoXUk5BiIEhoooHTEPZiobeErWuJD5jIcCVEpJO9ZAvABwrCEJ'
+      }
