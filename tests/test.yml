@@ -1,0 +1,6 @@
+---
+- hosts: localhost
+  #remote_user: root
+  become: yes
+  roles:
+    - { role: kvm-guest-create, guest_name: 'test' }
