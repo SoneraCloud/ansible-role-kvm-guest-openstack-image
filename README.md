@@ -1,7 +1,7 @@
 ansible-role-kvm-guest-openstack-image
 ======================================
 
-Create CentOS 7 KVM guests using an OpenStack image.
+Create CentOS 7 KVM guests on CentOS 7/Fedora hosts using an OpenStack image.
 
 By default this role will download the newest CentOS7 image from http://cloud.centos.org/, create a copy-on-write clone and then start the VM.
 
@@ -22,7 +22,7 @@ Example Playbook
 
     - hosts: servers
       roles:
-         - { role: kvm-guest-create, guest_name: 'example' }
+         - { role: ansible-role-kvm-guest-openstack-image, guest_name: 'example' }
 
 License
 -------
