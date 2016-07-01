@@ -75,8 +75,20 @@
 - name: Start the VM
   virt: name={{ guest_name }}
         command=start
+        state=running
         uri=qemu:///system
   tags: image
+
+- name: Get VM facts
+  virt: name={{ guest_name }}
+        command=get_xml
+        uri=qemu:///system
+  register: guest_output
+  tags: image,re
+
+  #- debug: msg={{ guest_output.get_xml | regex_replace('.*mac address(.*)\n.*', '\\1') }}
+- debug: msg={{ guest_output.get_xml | regex_replace('\n',' ') }}
+  tags: image,re
 
    # Cleanup temp files? VM is still booting :-(
 #- name: cleanup cloud-init files
