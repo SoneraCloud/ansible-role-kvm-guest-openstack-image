@@ -122,9 +122,15 @@
   become: yes
   delegate_to: "{{ hyper }}"
 
-  #- debug: msg={{ guest_output.get_xml | regex_replace('.*mac address(.*)\n.*', '\\1') }}
-- debug: msg={{ guest_output.get_xml | regex_replace('\n',' ') }}
+# If there is a better way to find this, I'd love to know.
+- name: Find mac address of new guest
+  set_fact: mac_address={{ guest_output.get_xml | regex_replace('\n','') | regex_replace('^<.*mac address=.([0-9:a-f]+).*$', '\\1') }}
   tags: image,re
+
+- debug: var=mac_address
+  tags: image,re
+
+- debug: msg={{ guest_output.get_xml | regex_replace('\n','') | regex_replace('^<.*mac address=.([0-9:a-f]+).*$', '\\1') }}
   delegate_to: "{{ hyper }}"
 
    # Cleanup temp files? VM is still booting :-(
