@@ -1,9 +1,19 @@
 ---
+- name: gather hypervisor facts
+  setup:
+  delegate_to: "{{ hyper }}"
+
+- name: group hypervisors by distro
+  group_by: key=os_{{ ansible_distribution }}_{{ ansible_distribution_major_version }}
+  delegate_to: "{{ hyper }}"
+
 # We first need to get the machine ready for deployment
 # Install ansible fedora deps
 - name: Install python and deps for ansible modules
   raw: dnf install -y python2 python2-dnf libselinux-python
   when: ansible_distribution == 'Fedora'
+  become: yes
+  delegate_to: "{{ hyper }}"
 
 # Install tools for KVM
 - name: Install KVM and deps
@@ -16,6 +26,8 @@
     - virt-install
     - genisoimage
   when: ansible_distribution == 'Fedora'
+  become: yes
+  delegate_to: "{{ hyper }}"
 
 # Install tools for KVM
 - name: Install KVM and deps
@@ -28,6 +40,8 @@
     - virt-install
     - genisoimage
   when: ansible_distribution == 'CentOS'
+  become: yes
+  delegate_to: "{{ hyper }}"
 
 # Fetch a ready made OpenStack image.
 # Read only, and owned by the qemu user.
@@ -36,16 +50,21 @@
 #  old versions or not do COW
 - name: Download specified image
   get_url: url={{ image_url_prefix }}/{{ image_name }} dest={{ image_path}} mode=0400 owner=qemu backup=yes
+  delegate_to: "{{ hyper }}"
+  become: yes
 
 # Build an ISO image to push to cloud-init
 - name: create a local temp directory
   command: mktemp -d "{{ lookup('env', 'TMPDIR') | default('/tmp', true) }}/ansible.XXXX"
   register: temp_dir
   tags: image
+  delegate_to: "{{ hyper }}"
 
 - name: Change ownership of temp directory
   file: path={{ temp_dir.stdout }} state=directory mode=0700 owner=qemu group=qemu
   tags: image
+  become: yes
+  delegate_to: "{{ hyper }}"
 
 - name: Generate cloud-init meta-data
   template: src={{ item }}.j2 dest={{ temp_dir.stdout }}/{{ item }} mode=0400 owner=qemu group=qemu
@@ -53,17 +72,28 @@
     - meta-data
     - user-data
   tags: image
+  become: yes
+  delegate_to: "{{ hyper }}"
 
 - name: Generate ISO for cloud-init
   command: genisoimage -output {{ temp_dir.stdout }}/cloud-init.iso -volid \
            cidata -joliet -rock {{ temp_dir.stdout }}/user-data \
            {{ temp_dir.stdout }}/meta-data
   tags: image
+  become: yes
+  delegate_to: "{{ hyper }}"
+
+- name: Fix permiossion of cloud-init iso
+  file: name={{ temp_dir.stdout }}/cloud-init.iso mode=0400 owner=qemu group=qemu
+  become: yes
+  delegate_to: "{{ hyper }}"
 
 # Actually do the KVM stuff
 - name: Create a copy-on-write clone of the image
   command: qemu-img create -f qcow2 -o backing_file={{ image_path}}/{{ image_name }} {{ image_path}}/{{ guest_name }}.qcow2
   tags: image
+  become: yes
+  delegate_to: "{{ hyper }}"
 
 - name: Define the VM though libvirt
   virt: name={{ guest_name }}
@@ -71,6 +101,8 @@
         xml="{{ lookup('template', 'libvirt-guest.xml.j2') }}"
         uri=qemu:///system
   tags: image
+  become: yes
+  delegate_to: "{{ hyper }}"
 
 - name: Start the VM
   virt: name={{ guest_name }}
@@ -78,6 +110,8 @@
         state=running
         uri=qemu:///system
   tags: image
+  become: yes
+  delegate_to: "{{ hyper }}"
 
 - name: Get VM facts
   virt: name={{ guest_name }}
@@ -85,10 +119,13 @@
         uri=qemu:///system
   register: guest_output
   tags: image,re
+  become: yes
+  delegate_to: "{{ hyper }}"
 
   #- debug: msg={{ guest_output.get_xml | regex_replace('.*mac address(.*)\n.*', '\\1') }}
 - debug: msg={{ guest_output.get_xml | regex_replace('\n',' ') }}
   tags: image,re
+  delegate_to: "{{ hyper }}"
 
    # Cleanup temp files? VM is still booting :-(
 #- name: cleanup cloud-init files
