@@ -25,6 +25,7 @@
     - virt-manager
     - virt-install
     - genisoimage
+    - python-lxml
   when: ansible_distribution == 'Fedora'
   become: yes
   delegate_to: "{{ hyper }}"
@@ -39,6 +40,7 @@
     - virt-manager
     - virt-install
     - genisoimage
+    - python-lxml
   when: ansible_distribution == 'CentOS'
   become: yes
   delegate_to: "{{ hyper }}"
@@ -49,7 +51,7 @@
 #  copy-on-write stuff! We should fix this in some clever way so we keep
 #  old versions or not do COW
 - name: Download specified image
-  get_url: url={{ image_url_prefix }}/{{ image_name }} dest={{ image_path}} mode=0400 owner=qemu backup=yes
+  get_url: url={{ image_url_prefix }}/{{ image_name }} dest={{ image_path}}/{{ image_name }} mode=0400 owner=qemu backup=yes
   delegate_to: "{{ hyper }}"
   become: yes
 
@@ -57,12 +59,10 @@
 - name: create a local temp directory
   command: mktemp -d "{{ lookup('env', 'TMPDIR') | default('/tmp', true) }}/ansible.XXXX"
   register: temp_dir
-  tags: image
   delegate_to: "{{ hyper }}"
 
 - name: Change ownership of temp directory
   file: path={{ temp_dir.stdout }} state=directory mode=0700 owner=qemu group=qemu
-  tags: image
   become: yes
   delegate_to: "{{ hyper }}"
 
@@ -71,7 +71,6 @@
   with_items:
     - meta-data
     - user-data
-  tags: image
   become: yes
   delegate_to: "{{ hyper }}"
 
@@ -79,61 +78,74 @@
   command: genisoimage -output {{ temp_dir.stdout }}/cloud-init.iso -volid \
            cidata -joliet -rock {{ temp_dir.stdout }}/user-data \
            {{ temp_dir.stdout }}/meta-data
-  tags: image
   become: yes
   delegate_to: "{{ hyper }}"
 
-- name: Fix permiossion of cloud-init iso
+- name: Fix permissions of cloud-init iso
   file: name={{ temp_dir.stdout }}/cloud-init.iso mode=0400 owner=qemu group=qemu
   become: yes
   delegate_to: "{{ hyper }}"
 
 # Actually do the KVM stuff
 - name: Create a copy-on-write clone of the image
-  command: qemu-img create -f qcow2 -o backing_file={{ image_path}}/{{ image_name }} {{ image_path}}/{{ guest_name }}.qcow2
-  tags: image
+  command: qemu-img create -f qcow2 -o backing_file={{ image_path}}/{{ image_name }} {{ image_path}}/{{ inventory_hostname }}.qcow2
   become: yes
   delegate_to: "{{ hyper }}"
 
 - name: Define the VM though libvirt
-  virt: name={{ guest_name }}
+  virt: name={{ inventory_hostname }}
         command=define
         xml="{{ lookup('template', 'libvirt-guest.xml.j2') }}"
         uri=qemu:///system
-  tags: image
+  register: defined
   become: yes
   delegate_to: "{{ hyper }}"
 
 - name: Start the VM
-  virt: name={{ guest_name }}
+  virt: name={{ inventory_hostname }}
         command=start
         state=running
         uri=qemu:///system
-  tags: image
   become: yes
   delegate_to: "{{ hyper }}"
 
 - name: Get VM facts
-  virt: name={{ guest_name }}
+  virt: name={{ inventory_hostname }}
         command=get_xml
         uri=qemu:///system
   register: guest_output
-  tags: image,re
   become: yes
   delegate_to: "{{ hyper }}"
 
 # If there is a better way to find this, I'd love to know.
 - name: Find mac address of new guest
   set_fact: mac_address={{ guest_output.get_xml | regex_replace('\n','') | regex_replace('^<.*mac address=.([0-9:a-f]+).*$', '\\1') }}
-  tags: image,re
 
-- debug: var=mac_address
-  tags: image,re
-
-- debug: msg={{ guest_output.get_xml | regex_replace('\n','') | regex_replace('^<.*mac address=.([0-9:a-f]+).*$', '\\1') }}
+- name: Get guest IP
+  command: virsh net-dhcp-leases --network default --mac {{ mac_address }}
+  changed_when: false
+  register: net_dhcp_leases
+  become: yes
   delegate_to: "{{ hyper }}"
 
-   # Cleanup temp files? VM is still booting :-(
-#- name: cleanup cloud-init files
-#  file: path={{ temp_dir.stdout }} state=absent
-#  tags: image
+- name: Parse guest IP and set fact
+  set_fact: guest_ip={{ net_dhcp_leases.stdout_lines[-1] | regex_replace('^.* ipv4 +(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\/.*$','\\1') }}
+
+- name: set vm to autostart
+  command: /bin/virsh autostart "{{ inventory_hostname }}"
+  become: yes
+  delegate_to: "{{ hyper }}"
+
+  # Before we cleanup temp files we need the VM to boot and get the keys working
+- name: wait for VM to become available before continuing
+  wait_for: port=22 host="{{ guest_ip }}" timeout=600
+  delegate_to: "{{ hyper }}"
+
+- name: Get facts from new vm (and wait for cloud-init ssh key deployment)
+  setup:
+  retries: 10
+  delay: 60
+
+- name: cleanup cloud-init files
+  file: path={{ temp_dir.stdout }} state=absent
+  become: yes
