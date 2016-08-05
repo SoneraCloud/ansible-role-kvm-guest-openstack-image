@@ -1,0 +1,38 @@
+---
+# We first need to get the machine ready for deployment
+# Install ansible fedora deps
+- name: Install python and deps for ansible modules
+  raw: dnf install -y python2 python2-dnf libselinux-python
+  when: ansible_distribution == 'Fedora'
+  become: yes
+  delegate_to: "{{ hyper }}"
+
+# Install tools for KVM
+- name: Install KVM and deps
+  dnf: name="{{ item }}"
+  with_items:
+    - kvm
+    - libvirt
+    - libvirt-python
+    - virt-manager
+    - virt-install
+    - genisoimage
+    - python-lxml
+  when: ansible_distribution == 'Fedora'
+  become: yes
+  delegate_to: "{{ hyper }}"
+
+# Install tools for KVM
+- name: Install KVM and deps
+  yum: name={{ item }}
+  with_items:
+    - kvm
+    - libvirt
+    - libvirt-python
+    - virt-manager
+    - virt-install
+    - genisoimage
+    - python-lxml
+  when: ansible_distribution == 'CentOS'
+  become: yes
+  delegate_to: "{{ hyper }}"
