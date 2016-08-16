@@ -15,7 +15,8 @@ A CentOS7 or Fedora host with enough disk, cpu and memory to launch vms.
 Role Variables
 --------------
 
-- guest_name: is the name that the new vm will take.
+This role now takes parameters from host vars and is heavily inspired by https://github.com/CSC-IT-Center-for-Science/ansible-role-provision-vm
+
 - bootstrap_ssh_key: ssh key to deploy to vm
 
 Optional:
@@ -28,7 +29,6 @@ Example Playbook
     - hosts: servers
       roles:
          - { role: ansible-role-kvm-guest-openstack-image,
-               guest_name: 'example',
                bootstrap_ssh_key: "ssh-rsa ABCD1234" }
 
 License
